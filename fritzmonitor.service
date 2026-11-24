@@ -1,0 +1,16 @@
+[Unit]
+Description=FritzMonitor - Monitor Internet locale
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 -B %h/.local/lib/fritzmonitor/fritzmonitor.py
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=35
+NoNewPrivileges=yes
+LockPersonality=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target

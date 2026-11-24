@@ -1,0 +1,24 @@
+# Modello illustrativo. Generare il file effettivo con configurazione.py.
+[router]
+host = "192.168.178.1"
+certificate_sha256 = ""
+username = ""
+password = ""
+
+[capture]
+interface = "3-0"
+tshark = "tshark"
+# Lista vuota per rilevare automaticamente i prefissi sul collegamento al router.
+local_networks = []
+
+[storage]
+retention_days = 90
+# database = "/percorso/monitor.sqlite3"
+# geoip = "/percorso/GeoLite2-Country.mmdb"
+
+[web]
+port = 8090
+
+[night]
+start_hour = 0
+end_hour = 6

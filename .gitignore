@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.pcap
+*.pcapng
+*.eth
+*.sqlite*
+*.db
+.env
+config.toml
+capture.lock
+monitor.lock
