@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,103 +10,103 @@
 <body>
   <header class="top">
     <div class="top-inner">
-      <a class="brand" href="#panoramica"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>FritzMonitor</a>
-      <nav aria-label="Sezioni">
-        <a href="#panoramica">Panoramica</a>
-        <a href="#dispositivi">Dispositivi</a>
-        <a href="#destinazioni">Destinazioni</a>
-        <a href="#comunicazioni">Comunicazioni</a>
+      <a class="brand" href="#overview"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>FritzMonitor</a>
+      <nav aria-label="Sections">
+        <a href="#overview">Overview</a>
+        <a href="#devices">Devices</a>
+        <a href="#destinations">Destinations</a>
+        <a href="#communications">Communications</a>
       </nav>
-      <div class="status" id="indicator" data-state="connessione"><span></span><strong id="connection">Connessione</strong></div>
+      <div class="status" id="indicator" data-state="connecting"><span></span><strong id="connection">Connecting</strong></div>
     </div>
   </header>
-  <main id="panoramica">
+  <main id="overview">
     <div class="heading">
-      <div><h1>Traffico Internet</h1><p id="connection-detail">In attesa della cattura dal FRITZ!Box</p></div>
-      <a id="csv" class="button secondary" href="/api/comunicazioni.csv" download>Esporta CSV</a>
+      <div><h1>Internet traffic</h1><p id="connection-detail">Waiting for the FRITZ!Box capture</p></div>
+      <a id="csv" class="button secondary" href="/api/communications.csv" download>Export CSV</a>
     </div>
     <p class="error" id="error" role="status" hidden></p>
     <form class="filters" id="filters" autocomplete="off">
-      <label>Dispositivo
-        <select id="device"><option value="">Tutti i dispositivi</option></select>
+      <label>Device
+        <select id="device"><option value="">All devices</option></select>
       </label>
-      <label>Intervallo
+      <label>Time range
         <select id="window">
-          <option value="ora">Ultima ora</option>
-          <option value="giorno" selected>Ultime 24 ore</option>
-          <option value="settimana">Ultimi 7 giorni</option>
-          <option value="mese">Ultimi 30 giorni</option>
-          <option value="storico">Tutto lo storico</option>
+          <option value="hour">Last hour</option>
+          <option value="day" selected>Last 24 hours</option>
+          <option value="week">Last 7 days</option>
+          <option value="month">Last 30 days</option>
+          <option value="history">All history</option>
         </select>
       </label>
-      <label class="search">Cerca
-        <input id="search" type="search" placeholder="IP, dominio, nome o porta" maxlength="250">
+      <label class="search">Search
+        <input id="search" type="search" placeholder="IP, domain, name, or port" maxlength="250">
       </label>
     </form>
 
-    <div class="metrics" aria-label="Totali dell’ultima ora">
-      <article class="metric"><span class="legend-key rx"></span><p>Ricevuti · ultima ora</p><strong id="received">—</strong></article>
-      <article class="metric"><span class="legend-key tx"></span><p>Inviati · ultima ora</p><strong id="sent">—</strong></article>
-      <article class="metric"><p>Dispositivi con traffico nel periodo</p><strong id="active-devices">—</strong></article>
+    <div class="metrics" aria-label="Totals for the last hour">
+      <article class="metric"><span class="legend-key rx"></span><p>Received · last hour</p><strong id="received">—</strong></article>
+      <article class="metric"><span class="legend-key tx"></span><p>Sent · last hour</p><strong id="sent">—</strong></article>
+      <article class="metric"><p>Devices with traffic in this period</p><strong id="active-devices">—</strong></article>
     </div>
 
     <div class="charts">
       <section class="panel">
-        <header><div><h2>In tempo reale</h2><p>Ultima ora · intervalli di 5 minuti</p></div></header>
-        <canvas id="live-chart" role="img" aria-label="Traffico Internet nell’ultima ora"></canvas>
+        <header><div><h2>Live traffic</h2><p>Last hour · 5-minute intervals</p></div></header>
+        <canvas id="live-chart" role="img" aria-label="Internet traffic in the last hour"></canvas>
       </section>
       <section class="panel">
         <header>
-          <div><h2>Storico</h2><p>Traffico nel periodo selezionato</p></div>
-          <select id="group" aria-label="Raggruppamento dello storico">
-            <option value="giorno">Giornaliero</option>
-            <option value="settimana">Settimanale</option>
-            <option value="mese">Mensile</option>
+          <div><h2>History</h2><p>Traffic in the selected period</p></div>
+          <select id="group" aria-label="History grouping">
+            <option value="day">Daily</option>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
           </select>
         </header>
-        <canvas id="history-chart" role="img" aria-label="Traffico aggregato per periodo"></canvas>
+        <canvas id="history-chart" role="img" aria-label="Traffic totals by period"></canvas>
       </section>
     </div>
 
-    <section class="panel" id="dispositivi">
-      <header><div><h2>Dispositivi locali</h2><p>Seleziona un dispositivo per vedere le sue comunicazioni.</p></div></header>
+    <section class="panel" id="devices">
+      <header><div><h2>Local devices</h2><p>Select a device to see its connections.</p></div></header>
       <div class="table-wrap"><table>
-        <thead><tr><th scope="col">Dispositivo</th><th scope="col">Indirizzi IP</th><th scope="col">MAC</th><th scope="col" class="number">Inviati</th><th scope="col" class="number">Ricevuti</th><th scope="col">Ultima attività</th></tr></thead>
+        <thead><tr><th scope="col">Device</th><th scope="col">IP addresses</th><th scope="col">MAC</th><th scope="col" class="number">Sent</th><th scope="col" class="number">Received</th><th scope="col">Last activity</th></tr></thead>
         <tbody id="device-rows"></tbody>
       </table></div>
     </section>
 
-    <section class="panel" id="destinazioni">
-      <header><div><h2>Server e domini</h2><p>Le 20 destinazioni con più traffico nel periodo.</p></div></header>
+    <section class="panel" id="destinations">
+      <header><div><h2>Servers and domains</h2><p>The 20 destinations with the most traffic in the selected period.</p></div></header>
       <div class="table-wrap"><table>
-        <thead><tr><th scope="col">IP remoto</th><th scope="col">Dominio</th><th scope="col">Paese</th><th scope="col" class="number">Inviati</th><th scope="col" class="number">Ricevuti</th><th scope="col">Prima osservazione</th></tr></thead>
+        <thead><tr><th scope="col">Remote IP</th><th scope="col">Domain</th><th scope="col">Country</th><th scope="col" class="number">Sent</th><th scope="col" class="number">Received</th><th scope="col">First seen</th></tr></thead>
         <tbody id="server-rows"></tbody>
       </table></div>
     </section>
 
-    <section class="panel" id="comunicazioni">
+    <section class="panel" id="communications">
       <header>
-        <div><h2>Comunicazioni Internet</h2><p id="filter-detail">Destinazioni, protocolli e orari osservati.</p></div>
-        <label class="view">Mostra
+        <div><h2>Internet connections</h2><p id="filter-detail">Observed destinations, protocols, and timestamps.</p></div>
+        <label class="view">Show
           <select id="mode">
-            <option value="tutte">Tutte le comunicazioni</option>
-            <option value="nuove">Nuove destinazioni</option>
-            <option value="volume">Volumi insoliti</option>
-            <option value="sconosciuti">Dispositivi sconosciuti</option>
-            <option value="periodiche">Attività periodiche</option>
-            <option value="porte">Porte insolite</option>
-            <option value="notte">Attività notturne</option>
+            <option value="all">All connections</option>
+            <option value="new">New destinations</option>
+            <option value="volume">Unusual traffic volumes</option>
+            <option value="unknown">Unknown devices</option>
+            <option value="periodic">Recurring activity</option>
+            <option value="ports">Unusual ports</option>
+            <option value="night">Nighttime activity</option>
           </select>
         </label>
       </header>
       <div class="table-wrap"><table>
-        <thead><tr><th scope="col">Dispositivo e IP locale</th><th scope="col">IP remoto e dominio</th><th scope="col">Protocollo / porta</th><th scope="col">Paese</th><th scope="col" class="number">Inviati</th><th scope="col" class="number">Ricevuti</th><th scope="col">Prima / ultima</th><th scope="col">Attività</th></tr></thead>
+        <thead><tr><th scope="col">Device and local IP</th><th scope="col">Remote IP and domain</th><th scope="col">Protocol / port</th><th scope="col">Country</th><th scope="col" class="number">Sent</th><th scope="col" class="number">Received</th><th scope="col">First / last seen</th><th scope="col">Activity</th></tr></thead>
         <tbody id="flow-rows"></tbody>
       </table></div>
       <div class="pages">
         <span id="page-info" aria-live="polite"></span>
-        <button type="button" id="prev" class="button secondary" disabled>Precedenti</button>
-        <button type="button" id="next" class="button secondary" disabled>Successive</button>
+        <button type="button" id="prev" class="button secondary" disabled>Previous</button>
+        <button type="button" id="next" class="button secondary" disabled>Next</button>
       </div>
     </section>
     <footer id="retention"></footer>

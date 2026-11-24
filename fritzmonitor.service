@@ -1,5 +1,5 @@
 [Unit]
-Description=FritzMonitor - Monitor Internet locale
+Description=FritzMonitor - Local Internet traffic monitor
 
 [Service]
 Type=exec

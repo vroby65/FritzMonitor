@@ -1,4 +1,4 @@
-# Modello illustrativo. Generare il file effettivo con configurazione.py.
+# Example only. Run configure.py to create the actual file.
 [router]
 host = "192.168.178.1"
 certificate_sha256 = ""
@@ -8,13 +8,13 @@ password = ""
 [capture]
 interface = "3-0"
 tshark = "tshark"
-# Lista vuota per rilevare automaticamente i prefissi sul collegamento al router.
+# Leave this list empty to detect prefixes on the router's network link.
 local_networks = []
 
 [storage]
 retention_days = 90
-# database = "/percorso/monitor.sqlite3"
-# geoip = "/percorso/GeoLite2-Country.mmdb"
+# database = "/path/to/monitor.sqlite3"
+# geoip = "/path/to/GeoLite2-Country.mmdb"
 
 [web]
 port = 8090

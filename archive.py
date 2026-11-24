@@ -1,15 +1,15 @@
-"""Persistenza e interrogazione degli aggregati di cinque minuti."""
+"""Store and query five-minute traffic aggregates."""
 
 import sqlite3
 from time import time
 
 BUCKET = 300
 DAY = 86400
-WINDOWS = {"ora": 3600, "giorno": DAY, "settimana": 7 * DAY, "mese": 30 * DAY, "storico": None}
+WINDOWS = {"hour": 3600, "day": DAY, "week": 7 * DAY, "month": 30 * DAY, "history": None}
 HISTORY = {
-    "giorno": "date(bucket,'unixepoch','localtime')",
-    "settimana": "date(bucket,'unixepoch','localtime','-6 days','weekday 1')",
-    "mese": "strftime('%Y-%m-01',bucket,'unixepoch','localtime')",
+    "day": "date(bucket,'unixepoch','localtime')",
+    "week": "date(bucket,'unixepoch','localtime','-6 days','weekday 1')",
+    "month": "strftime('%Y-%m-01',bucket,'unixepoch','localtime')",
 }
 COMMON_PORTS = "20,21,22,25,53,80,110,123,143,443,465,587,853,993,995,3478,5228,5349"
 SCHEMA = """
@@ -93,7 +93,7 @@ def prune(db, retention_days, now=None):
 
 def date_cutoff(window, retention, now):
     if window not in WINDOWS:
-        raise ValueError("Intervallo non valido")
+        raise ValueError("Invalid time range")
     days = retention * DAY
     limit = WINDOWS[window]
     return bucket_of(now - min(days, limit or days))
@@ -140,7 +140,7 @@ def devices(db, cutoff):
 
 def timeline(db, cutoff, device, unit):
     if unit not in HISTORY:
-        raise ValueError("Raggruppamento non valido")
+        raise ValueError("Invalid history grouping")
     base, params = filtered(cutoff, device, "")
     return db.execute(f"""
         SELECT {HISTORY[unit]} AS period, sum(tx) AS tx, sum(rx) AS rx
@@ -170,15 +170,15 @@ def communications(db, cutoff, device, query, mode, now, limit=None, offset=0):
     ctes = [f"base AS ({base})"]
     where = ""
     interval = "NULL"
-    if mode == "nuove":
+    if mode == "new":
         where = "WHERE first_destination >= :since"
-    elif mode == "notte":
+    elif mode == "night":
         where = "WHERE night = 1"
-    elif mode == "sconosciuti":
+    elif mode == "unknown":
         where = "WHERE name = ''"
-    elif mode == "porte":
+    elif mode == "ports":
         where = f"WHERE port > 0 AND port NOT IN ({COMMON_PORTS})"
-    elif mode == "periodiche":
+    elif mode == "periodic":
         ctes.append("""
             moments AS (
                 SELECT DISTINCT device_id, remote, protocol, port, bucket FROM base
@@ -216,11 +216,11 @@ def communications(db, cutoff, device, query, mode, now, limit=None, offset=0):
             )
         """)
         where = "WHERE EXISTS (SELECT 1 FROM large l WHERE l.device=base.device AND l.bucket=base.bucket)"
-    elif mode != "tutte":
-        raise ValueError("Filtro non valido")
+    elif mode != "all":
+        raise ValueError("Invalid filter")
 
     source = "base"
-    if mode == "periodiche":
+    if mode == "periodic":
         source += " JOIN repeated USING(device_id,remote,protocol,port)"
     sql = f"""
         WITH {", ".join(ctes)}

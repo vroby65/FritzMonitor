@@ -27,8 +27,8 @@ nav { display: flex; gap: clamp(10px, 2.5vw, 29px); }
 nav a { color: #d7e5f4; font-weight: 600; }
 .status { display: flex; gap: 8px; align-items: center; margin-left: auto; color: #dae6f3; white-space: nowrap; }
 .status span { border-radius: 50%; width: 9px; height: 9px; background: #dda952; }
-.status[data-state="attivo"] span { background: #5cd4a6; }
-.status[data-state="configurazione"] span { background: #f58986; }
+.status[data-state="running"] span { background: #5cd4a6; }
+.status[data-state="configuration"] span { background: #f58986; }
 main { padding-top: 31px; padding-bottom: 30px; }
 .heading, .panel header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 h1, h2, p { margin: 0; }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Demone di acquisizione e dashboard HTTP locale di FritzMonitor."""
+"""Run the FritzMonitor capture daemon and local dashboard."""
 
 from argparse import ArgumentParser
 from contextlib import ExitStack, suppress
@@ -16,12 +16,12 @@ import sys
 from threading import Event, Thread
 from time import monotonic
 
-import archivio
+import archive
 from collector import Collector
-from configurazione import DEFAULT, exclusive_capture, read_settings, router_settings
+from configure import DEFAULT, exclusive_capture, read_settings, router_settings
 from fritzrouter import AuthenticationError, CertificateError, LoginBlocked, RouterError, default_username
 from hosts import HostAPI, HostDirectory
-from prototipo import NETWORK_ERRORS, capture, detect_networks
+from probe import NETWORK_ERRORS, capture, detect_networks
 from webapp import Server
 
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "fritzmonitor"
@@ -48,7 +48,7 @@ def settings_from(config, args):
 
 def integer(value, name, lower, upper=None):
     if type(value) is not int or value < lower or (upper is not None and value > upper):
-        raise ValueError(f"Valore {name} non valido")
+        raise ValueError(f"Invalid value for {name}")
     return value
 
 
@@ -60,7 +60,7 @@ def run_capture(router, username, password, settings, collector, stop):
         delay = pause
         opened_at = monotonic()
         collector.connection_open = False
-        collector.status.update(state="connessione", message="")
+        collector.status.update(state="connecting", message="")
         try:
             if not settings["networks"]:
                 with suppress(OSError, ValueError, RouterError, subprocess.SubprocessError):
@@ -68,7 +68,7 @@ def run_capture(router, username, password, settings, collector, stop):
             sid = router.login(username, password)
             details = router.interfaces(sid).get(interface)
             if details is None:
-                raise AuthenticationError(f"Interfaccia {interface} assente nella pagina di cattura")
+                raise AuthenticationError(f"Interface {interface} is missing from the capture page")
             collector.started = monotonic()
             check_at = monotonic() + 300
 
@@ -77,26 +77,26 @@ def run_capture(router, username, password, settings, collector, stop):
                 collector.tick()
                 if monotonic() >= check_at:
                     if router.state({"sid": sid}, timeout=3).findtext("SID", "") != sid:
-                        raise RouterError("Sessione del router scaduta")
+                        raise RouterError("Router session expired")
                     if not settings["networks"]:
                         with suppress(OSError, ValueError, RouterError, subprocess.SubprocessError):
                             collector.networks = detect_networks(router.host)
                     check_at = monotonic() + 300
 
-            LOG.info("Apertura interfaccia %s", interface)
+            LOG.info("Opening interface %s", interface)
             capture(router, sid, interface, details, settings["tshark"], collector, stop,
                     float("inf"), None, tick)
         except (AuthenticationError, CertificateError) as error:
-            collector.status.update(state="configurazione", message=str(error))
+            collector.status.update(state="configuration", message=str(error))
             LOG.error("%s", error)
             stop.wait()
         except LoginBlocked as error:
             delay = max(delay, error.seconds)
-            collector.status.update(state="riconnessione", message=str(error))
+            collector.status.update(state="reconnecting", message=str(error))
             LOG.warning("%s", error)
         except NETWORK_ERRORS as error:
-            collector.status.update(state="riconnessione", message=str(error))
-            LOG.warning("Cattura interrotta: %s", error)
+            collector.status.update(state="reconnecting", message=str(error))
+            LOG.warning("Capture interrupted. %s", error)
         finally:
             collector.flush()
             if sid:
@@ -128,7 +128,7 @@ def main():
         settings = settings_from(config, args)
         executable = shutil.which(settings["tshark"])
         if not executable:
-            raise ValueError("TShark assente. Installare il pacchetto tshark")
+            raise ValueError("TShark was not found. Install the tshark package")
         settings["tshark"] = executable
         networks = settings["networks"] or detect_networks(router.host)
         database = settings["database"]
@@ -140,21 +140,21 @@ def main():
             try:
                 flock(lock, LOCK_EX | LOCK_NB)
             except BlockingIOError:
-                raise ValueError("Archivio già in uso da un altro demone") from None
-            db = archivio.writer(database)
+                raise ValueError("Another daemon is using the database") from None
+            db = archive.writer(database)
             resources.callback(db.close)
             geo = None
             if settings["geoip"]:
                 try:
                     import maxminddb
                 except ImportError:
-                    raise ValueError("Per il GeoIP locale installare python3-maxminddb") from None
+                    raise ValueError("Install python3-maxminddb to use local GeoIP") from None
                 geo = maxminddb.open_database(str(Path(settings["geoip"]).expanduser()))
                 resources.callback(geo.close)
 
             username = username or default_username(router.state())
             hosts = HostDirectory(HostAPI(router, username, password), stop, LOG)
-            status = {"state": "connessione", "message": "", "interface": settings["interface"],
+            status = {"state": "connecting", "message": "", "interface": settings["interface"],
                       "last_packet": None, "retention_days": settings["retention_days"]}
             http = Server(settings["port"], database, status, settings, hosts)
             resources.callback(http.server_close)
@@ -162,7 +162,7 @@ def main():
             thread.start()
             resources.callback(http.shutdown)
             collector = Collector(db, networks, hosts, settings, geo, status)
-            LOG.info("Dashboard su http://127.0.0.1:%s", settings["port"])
+            LOG.info("Dashboard at http://127.0.0.1:%s", settings["port"])
             hosts.start()
             try:
                 run_capture(router, username, password, settings, collector, stop)

@@ -2,7 +2,7 @@ import ipaddress
 import unittest
 
 from fritzrouter import CaptureInterface, interfaces_from_page, solve_challenge
-from prototipo import FIELDS, Packet, decode_packet, identify
+from probe import FIELDS, Packet, decode_packet, identify
 
 
 class RouterTests(unittest.TestCase):
@@ -18,11 +18,11 @@ class RouterTests(unittest.TestCase):
 
     def test_legacy_html_supplies_actual_stop_parameters(self):
         reply = b'''<table><tr>
-            <th>Interfaccia di instradamento</th>
-            <td><button name="start" value="3-0">Avvio</button></td>
+            <th>Routing interface</th>
+            <td><button name="start" value="3-0">Start</button></td>
             <td><button name="stop" value="3;0;all">Stop</button></td>
             </tr></table>'''
-        expected = CaptureInterface("Interfaccia di instradamento", ("3", "0", "all"))
+        expected = CaptureInterface("Routing interface", ("3", "0", "all"))
         self.assertEqual(interfaces_from_page(reply), {"3-0": expected})
 
 

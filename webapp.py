@@ -1,4 +1,4 @@
-"""HTTP e API di sola lettura, riservati al loopback."""
+"""Serve the read-only dashboard and API on loopback."""
 
 from contextlib import closing
 import csv
@@ -11,7 +11,7 @@ import sqlite3
 from time import time
 from urllib.parse import parse_qs, urlsplit
 
-import archivio
+import archive
 
 ASSETS = Path(__file__).resolve().parent / "web"
 FILES = {
@@ -21,12 +21,12 @@ FILES = {
 }
 PAGE = 40
 CSV_FIELDS = (
-    ("device", "Dispositivo"), ("name", "Nome"), ("mac", "MAC"), ("local", "IP locale"),
-    ("remote", "IP remoto"), ("domain", "Dominio"), ("country", "Paese"),
-    ("protocol", "Protocollo"), ("port", "Porta remota"), ("tx", "Byte inviati"),
-    ("rx", "Byte ricevuti"), ("packets", "Pacchetti"), ("first", "Prima osservazione"),
-    ("last", "Ultima osservazione"), ("first_destination", "Prima osservazione della destinazione"),
-    ("new", "Nuova destinazione"), ("night", "Notte"), ("period_seconds", "Intervallo periodico (s)"),
+    ("device", "Device"), ("name", "Name"), ("mac", "MAC"), ("local", "Local IP"),
+    ("remote", "Remote IP"), ("domain", "Domain"), ("country", "Country"),
+    ("protocol", "Protocol"), ("port", "Remote port"), ("tx", "Bytes sent"),
+    ("rx", "Bytes received"), ("packets", "Packets"), ("first", "First seen"),
+    ("last", "Last seen"), ("first_destination", "Destination first seen"),
+    ("new", "New destination"), ("night", "Night"), ("period_seconds", "Recurring interval (s)"),
 )
 
 
@@ -103,25 +103,25 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         host = self.headers.get("Host", "").split(":", 1)[0].lower()
         if host not in ("127.0.0.1", "localhost"):
-            self.send_json({"error": "Host HTTP non consentito"}, 403)
+            self.send_json({"error": "HTTP host not allowed"}, 403)
             return
         parsed = urlsplit(self.path)
         if parsed.path in self.server.assets:
             content, content_type = self.server.assets[parsed.path]
             self.send_bytes(200, content, content_type)
             return
-        if parsed.path == "/api/stato":
+        if parsed.path == "/api/status":
             self.send_json(dict(self.server.state))
             return
-        if parsed.path not in ("/api/dashboard", "/api/comunicazioni.csv"):
-            self.send_json({"error": "Risorsa non trovata"}, 404)
+        if parsed.path not in ("/api/dashboard", "/api/communications.csv"):
+            self.send_json({"error": "Resource not found"}, 404)
             return
         try:
             self.dashboard(parsed.path, parse_qs(parsed.query, max_num_fields=20))
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
         except sqlite3.Error:
-            self.send_json({"error": "Archivio temporaneamente indisponibile"}, 503)
+            self.send_json({"error": "Database temporarily unavailable"}, 503)
         except (BrokenPipeError, ConnectionResetError, socket.timeout):
             pass
 
@@ -129,19 +129,19 @@ class Handler(BaseHTTPRequestHandler):
         value = lambda name, default="": query.get(name, [default])[0][:250]
         now = time()
         retention = self.server.settings["retention_days"]
-        cutoff = archivio.date_cutoff(value("window", "giorno"), retention, now)
-        device, search, mode = value("device"), value("q"), value("mode", "tutte")
-        unit = value("group", "giorno")
+        cutoff = archive.date_cutoff(value("window", "day"), retention, now)
+        device, search, mode = value("device"), value("q"), value("mode", "all")
+        unit = value("group", "day")
         page = int(value("page", "0"))
         if not 0 <= page <= 1000000:
-            raise ValueError("Pagina non valida")
-        with closing(archivio.reader(self.server.db)) as db:
+            raise ValueError("Invalid page")
+        with closing(archive.reader(self.server.db)) as db:
             if path.endswith(".csv"):
-                results = archivio.communications(db, cutoff, device, search, mode, now)
+                results = archive.communications(db, cutoff, device, search, mode, now)
                 self.export(results)
                 return
-            flows = rows(archivio.communications(db, cutoff, device, search, mode, now, PAGE + 1, page * PAGE))
-            devices = rows(archivio.devices(db, cutoff))
+            flows = rows(archive.communications(db, cutoff, device, search, mode, now, PAGE + 1, page * PAGE))
+            devices = rows(archive.devices(db, cutoff))
             by_id = {item["id"]: item for item in devices}
             for address, host in self.server.hosts.ipv4.items():
                 existing = by_id.get(host.mac)
@@ -156,9 +156,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({
                 "status": dict(self.server.state),
                 "devices": devices,
-                "servers": rows(archivio.servers(db, cutoff, device, search)),
-                "live": rows(archivio.overview(db, archivio.date_cutoff("ora", retention, now), device)),
-                "history": rows(archivio.timeline(db, cutoff, device, unit)),
+                "servers": rows(archive.servers(db, cutoff, device, search)),
+                "live": rows(archive.overview(db, archive.date_cutoff("hour", retention, now), device)),
+                "history": rows(archive.timeline(db, cutoff, device, unit)),
                 "now": now, "flows": flows[:PAGE], "has_next": len(flows) > PAGE, "page_size": PAGE,
             })
 

@@ -1,4 +1,4 @@
-"""Classifica i pacchetti in memoria e aggiorna gli aggregati SQLite."""
+"""Classify packets in memory and update SQLite aggregates."""
 
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -8,10 +8,10 @@ from ipaddress import ip_address
 import re
 from time import monotonic, time
 
-from archivio import (
+from archive import (
     UPSERT_ALIAS, UPSERT_DESTINATION, UPSERT_DEVICE, UPSERT_FLOW, bucket_of, prune,
 )
-from prototipo import identify
+from probe import identify
 
 
 def hostname(value):
@@ -191,8 +191,8 @@ class Collector:
 
     def tick(self):
         now = monotonic()
-        if self.connection_open and self.status["state"] != "attivo":
-            self.status.update(state="attivo", message="")
+        if self.connection_open and self.status["state"] != "running":
+            self.status.update(state="running", message="")
         if now - self.last_flush >= 5:
             self.flush()
         if now >= self.next_prune:

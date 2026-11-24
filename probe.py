@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Misura la copertura pre-NAT del FRITZ!Box senza salvare pacchetti."""
+"""Test FRITZ!Box capture coverage before NAT without saving packets."""
 
 from argparse import ArgumentParser
 from collections import defaultdict
@@ -19,7 +19,7 @@ import sys
 from threading import Event, Thread
 from time import monotonic
 
-from configurazione import DEFAULT, exclusive_capture, load, local_host, read_settings, router_settings
+from configure import DEFAULT, exclusive_capture, load, local_host, read_settings, router_settings
 from fritzrouter import (
     AuthenticationError, CertificateError, LoginBlocked, Router, RouterError, pcap_chunks,
 )
@@ -103,7 +103,7 @@ def identify(packet, networks):
 def detect_networks(host):
     route = linux_ip("route", "get", host)[0]
     if route.get("gateway"):
-        raise RouterError("Il router non è raggiungibile sul collegamento diretto. Specificare le reti con --rete")
+        raise RouterError("The router is not on a directly connected network. Specify local prefixes with --network")
     interface = linux_ip("address", "show", "dev", route["dev"])[0]
     networks = set()
     for entry in interface["addr_info"]:
@@ -113,7 +113,7 @@ def detect_networks(host):
         if address.version == 6 or ipaddress.ip_address(host) in address.network:
             networks.add(address.network)
     if not networks:
-        raise RouterError("Nessun prefisso locale rilevato. Specificare le reti con --rete")
+        raise RouterError("No local prefixes detected. Specify local prefixes with --network")
     return sorted(networks, key=lambda network: (network.version, network.network_address, network.prefixlen))
 
 
@@ -148,10 +148,10 @@ class Sample:
 
     def report(self, interface, expected):
         devices = [
-            {"ip": ip, "mac": mac or None, "pacchetti_inviati": sent, "pacchetti_ricevuti": received,
-             "byte_inviati": tx, "byte_ricevuti": rx,
-             "nome": self.hosts[ip].name if ip in self.hosts and self.hosts[ip].mac == mac else None,
-             "origine_mac": "frame" if (ip, mac) in self.link_addresses else "inventario" if mac else None}
+            {"ip": ip, "mac": mac or None, "packets_sent": sent, "packets_received": received,
+             "bytes_sent": tx, "bytes_received": rx,
+             "name": self.hosts[ip].name if ip in self.hosts and self.hosts[ip].mac == mac else None,
+             "mac_source": "frame" if (ip, mac) in self.link_addresses else "inventory" if mac else None}
             for (ip, mac), (sent, received, tx, rx) in sorted(self.devices.items())
         ]
         observations = []
@@ -159,18 +159,18 @@ class Sample:
             matches = [device for device in devices if device["ip"] == address
                        and (not mac or mac == device["mac"])]
             observations.append({
-                "ip": address, "mac": mac or None, "visibile": bool(matches),
-                "bidirezionale": any(item["pacchetti_inviati"] and item["pacchetti_ricevuti"]
+                "ip": address, "mac": mac or None, "observed": bool(matches),
+                "bidirectional": any(item["packets_sent"] and item["packets_received"]
                                      for item in matches),
             })
         return {
-            "ora": datetime.now().astimezone().isoformat(timespec="seconds"),
-            "interfaccia": interface,
-            "secondi": round(self.elapsed or monotonic() - self.started, 1),
-            "stream_pcap": self.connection_open,
-            "frame_ip": self.ip_frames,
-            "dispositivi": devices,
-            "attesi": observations,
+            "time": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "interface": interface,
+            "seconds": round(self.elapsed or monotonic() - self.started, 1),
+            "pcap_stream": self.connection_open,
+            "ip_frames": self.ip_frames,
+            "devices": devices,
+            "expected": observations,
         }
 
 
@@ -201,7 +201,7 @@ def capture(router, sid, interface, details, executable, sample, stop, deadline,
                             pending = pending[written:]
                         chunk = next(chunks, None)
                         if chunk is None:
-                            raise RouterError("Il router ha chiuso lo stream PCAP")
+                            raise RouterError("The router closed the PCAP stream")
                 finally:
                     try:
                         router.read(router.capture_path(sid, interface, "Stop", details.stop), timeout=3)
@@ -253,16 +253,16 @@ def capture(router, sid, interface, details, executable, sample, stop, deadline,
             process.wait()
         worker.join(router.timeout + 5)
     if cleanup_failed.is_set():
-        print(f"Il router non ha confermato l'arresto di {interface}.", file=sys.stderr)
+        print(f"The router did not confirm that it stopped {interface}.", file=sys.stderr)
     if not stop.is_set():
         if not sample.connection_open or not stopped_at_deadline:
             if errors:
                 raise errors[0]
-            raise RouterError(f"tshark ha chiuso lo stream (codice {process.returncode})")
+            raise RouterError(f"TShark closed the stream (exit code {process.returncode})")
 
 
 def diagnostic(args):
-    if args.autenticata:
+    if args.authenticated:
         router, username, password = load(args.config.expanduser())
     else:
         router = Router(local_host(args.host))
@@ -270,11 +270,11 @@ def diagnostic(args):
     model, version = router.info()
     state = router.state()
     print(f"{model}, FRITZ!OS {version}")
-    print(f"PBKDF2: {'sì' if state.findtext('Challenge', '').startswith('2$') else 'no'}")
-    print(f"BlockTime: {state.findtext('BlockTime', '?')} secondi")
+    print(f"PBKDF2: {'yes' if state.findtext('Challenge', '').startswith('2$') else 'no'}")
+    print(f"BlockTime: {state.findtext('BlockTime', '?')} seconds")
     with router.request("/html/capture.html"):
-        print("Pagina /html/capture.html raggiungibile")
-    if args.autenticata:
+        print("Capture page /html/capture.html is reachable")
+    if args.authenticated:
         sid = router.login(username, password)
         try:
             for interface, details in router.interfaces(sid).items():
@@ -290,8 +290,8 @@ def observe(args, stop):
     router, username, password = router_settings(config["router"])
     command = shutil.which(args.tshark or config.get("capture", {}).get("tshark", "tshark"))
     if not command:
-        raise RouterError("tshark non trovato. Installare il pacchetto tshark o usare --tshark")
-    networks = args.rete or detect_networks(router.host)
+        raise RouterError("TShark was not found. Install the tshark package or use --tshark")
+    networks = args.network or detect_networks(router.host)
     hosts = {}
     try:
         hosts = HostAPI(router, username, password).hosts()
@@ -299,9 +299,9 @@ def observe(args, stop):
         if not route.get("gateway"):
             hosts.update(ipv6_neighbors(route["dev"], hosts))
     except (*HOST_ERRORS, KeyError, IndexError, subprocess.SubprocessError):
-        print("Inventario TR-064 non disponibile per questo campione.", file=sys.stderr)
-    print("Prefissi osservati: " + ", ".join(map(str, networks)), file=sys.stderr)
-    if args.action == "copertura" and not args.interfaccia:
+        print("TR-064 inventory unavailable for this sample.", file=sys.stderr)
+    print("Monitored prefixes: " + ", ".join(map(str, networks)), file=sys.stderr)
+    if args.action == "coverage" and not args.interface:
         sid = router.login(username, password)
         try:
             interfaces = list(router.interfaces(sid))
@@ -309,9 +309,9 @@ def observe(args, stop):
             with suppress(*NETWORK_ERRORS):
                 router.logout(sid)
     else:
-        interfaces = args.interfaccia if args.action == "copertura" else [args.interfaccia]
+        interfaces = args.interface if args.action == "coverage" else [args.interface]
 
-    overall_deadline = monotonic() + args.secondi if args.secondi else float("inf")
+    overall_deadline = monotonic() + args.seconds if args.seconds else float("inf")
     backoff = 2
     useful = False
     while not stop.is_set():
@@ -319,23 +319,23 @@ def observe(args, stop):
             if stop.is_set():
                 break
             sid = None
-            sample = Sample(networks, args.destinazione, hosts)
+            sample = Sample(networks, args.destination, hosts)
             def report(data):
-                print(json.dumps(data.report(interface, args.atteso)), flush=True)
+                print(json.dumps(data.report(interface, args.expected)), flush=True)
             delay = backoff
             try:
                 sid = router.login(username, password)
                 details = router.interfaces(sid).get(interface)
                 if details is None:
-                    raise RouterError("ID assente nella pagina di cattura del router")
-                deadline = monotonic() + args.secondi if args.action == "copertura" else overall_deadline
-                print(f"Apertura dello stream {interface}.", file=sys.stderr, flush=True)
+                    raise RouterError("Interface ID missing from the router capture page")
+                deadline = monotonic() + args.seconds if args.action == "coverage" else overall_deadline
+                print(f"Opening stream {interface}.", file=sys.stderr, flush=True)
                 capture(router, sid, interface, details, command, sample, stop, deadline,
-                        report if args.action == "cattura" else None)
+                        report if args.action == "capture" else None)
             except (AuthenticationError, CertificateError):
                 raise
             except LoginBlocked as error:
-                if args.action == "copertura":
+                if args.action == "coverage":
                     raise
                 delay = max(error.seconds, delay)
                 print(error, file=sys.stderr)
@@ -345,20 +345,20 @@ def observe(args, stop):
                 if sid is not None:
                     with suppress(*NETWORK_ERRORS):
                         router.logout(sid)
-            result = sample.report(interface, args.atteso)
+            result = sample.report(interface, args.expected)
             print(json.dumps(result), flush=True)
-            if result["dispositivi"] and all(item["bidirezionale"] for item in result["attesi"]):
+            if result["devices"] and all(item["bidirectional"] for item in result["expected"]):
                 useful = True
-            if args.action == "cattura":
+            if args.action == "capture":
                 if stop.is_set() or monotonic() >= overall_deadline:
                     break
                 if sample.elapsed >= 30 and sample.connection_open:
                     delay = backoff = 2
                 else:
                     backoff = min(backoff * 2, 60)
-                print(f"Nuovo tentativo tra {delay} secondi.", file=sys.stderr, flush=True)
+                print(f"Retrying in {delay} seconds.", file=sys.stderr, flush=True)
                 stop.wait(min(delay, max(0, overall_deadline - monotonic())))
-        if args.action == "copertura" or monotonic() >= overall_deadline:
+        if args.action == "coverage" or monotonic() >= overall_deadline:
             break
     return 0 if useful else 1
 
@@ -366,7 +366,7 @@ def observe(args, stop):
 def positive(value):
     seconds = int(value)
     if seconds <= 0:
-        raise ValueError("Il numero di secondi deve essere positivo")
+        raise ValueError("The duration must be positive")
     return seconds
 
 
@@ -377,7 +377,7 @@ def expected_device(value):
         len(part) != 2 or any(char not in "0123456789abcdef" for char in part)
         for part in mac.split(":")
     )):
-        raise ValueError("Usare IP oppure IP@MAC")
+        raise ValueError("Use IP or IP@MAC")
     return str(ipaddress.ip_address(address)), mac
 
 
@@ -385,27 +385,27 @@ def main():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT)
     commands = parser.add_subparsers(dest="action", required=True)
-    diag = commands.add_parser("diagnostica")
+    diag = commands.add_parser("diagnostics")
     diag.add_argument("--host", default="192.168.178.1")
-    diag.add_argument("--autenticata", action="store_true")
-    for action in ("cattura", "copertura"):
+    diag.add_argument("--authenticated", action="store_true")
+    for action in ("capture", "coverage"):
         command = commands.add_parser(action)
         command.add_argument("--tshark")
-        command.add_argument("--rete", action="append", type=ipaddress.ip_network)
-        command.add_argument("--destinazione", type=ipaddress.ip_address)
-        command.add_argument("--atteso", action="append", type=expected_device, default=[])
-        command.add_argument("--secondi", type=positive, default=30 if action == "copertura" else None)
-        if action == "copertura":
-            command.add_argument("--interfaccia", action="append")
+        command.add_argument("--network", action="append", type=ipaddress.ip_network)
+        command.add_argument("--destination", type=ipaddress.ip_address)
+        command.add_argument("--expected", action="append", type=expected_device, default=[])
+        command.add_argument("--seconds", type=positive, default=30 if action == "coverage" else None)
+        if action == "coverage":
+            command.add_argument("--interface", action="append")
         else:
-            command.add_argument("--interfaccia", required=True)
+            command.add_argument("--interface", required=True)
 
     args = parser.parse_args()
     stop = Event()
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, lambda *_: stop.set())
     try:
-        if args.action == "diagnostica":
+        if args.action == "diagnostics":
             return diagnostic(args)
         with exclusive_capture(args.config):
             return observe(args, stop)

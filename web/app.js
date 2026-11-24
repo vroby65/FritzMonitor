@@ -5,19 +5,19 @@ const controls = {
   device: get("device"), window: get("window"), q: get("search"),
   group: get("group"), mode: get("mode"),
 };
-const number = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 });
-const recentDate = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" });
-const hour = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" });
-const dates = new Intl.DateTimeFormat("it-IT", { month: "short", day: "numeric" });
-const stateName = { attivo: "Cattura attiva", connessione: "Connessione", riconnessione: "Riconnessione", configurazione: "Configurazione" };
+const number = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
+const recentDate = new Intl.DateTimeFormat("en-GB", { dateStyle: "short", timeStyle: "short" });
+const hour = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const dates = new Intl.DateTimeFormat("en-GB", { month: "short", day: "numeric" });
+const stateName = { running: "Capture running", connecting: "Connecting", reconnecting: "Reconnecting", configuration: "Setup required" };
 const descriptions = {
-  tutte: "Destinazioni, protocolli e orari osservati.",
-  nuove: "Destinazioni viste per la prima volta nel periodo selezionato.",
-  volume: "Finestre di cinque minuti sopra 16 MiB e quattro volte la media recente del dispositivo.",
-  sconosciuti: "Comunicazioni che non hanno ancora un nome dall’inventario locale.",
-  periodiche: "Destinazioni con almeno tre intervalli simili. Possono indicare attività in background.",
-  porte: "Porte remote fuori dall’elenco di servizi comuni.",
-  notte: "Comunicazioni nelle fasce orarie notturne configurate.",
+  all: "Observed destinations, protocols, and timestamps.",
+  new: "Destinations first seen in the selected period.",
+  volume: "Five-minute intervals with at least 16 MiB and more than four times the device's recent average.",
+  unknown: "Connections from devices with no name in the local inventory.",
+  periodic: "Destinations contacted at three or more similar intervals. This may indicate background activity.",
+  ports: "Remote ports outside the common services list.",
+  night: "Connections during the configured nighttime hours.",
 };
 
 let currentPage = 0;
@@ -84,12 +84,12 @@ function selectDevice(id) {
   controls.device.value = id;
   currentPage = 0;
   refresh();
-  get("comunicazioni").scrollIntoView();
+  get("communications").scrollIntoView();
 }
 
 function updateDeviceOptions(devices) {
   const chosen = controls.device.value;
-  const entries = [["", "Tutti i dispositivi"]];
+  const entries = [["", "All devices"]];
   for (const device of devices) {
     entries.push([device.id, device.name || device.addresses || device.id]);
   }
@@ -117,13 +117,13 @@ function drawChart(id, points, label, aria) {
   ctx.fillStyle = "#526579";
   if (!points.length) {
     ctx.textAlign = "center";
-    ctx.fillText("Nessun traffico osservato", width / 2, height / 2);
-    canvas.setAttribute("aria-label", `${aria}. Nessun traffico osservato.`);
+    ctx.fillText("No traffic observed", width / 2, height / 2);
+    canvas.setAttribute("aria-label", `${aria}. No traffic observed.`);
     return;
   }
 
   const peak = Math.max(1, ...points.map((p) => p.rx + p.tx));
-  canvas.setAttribute("aria-label", `${aria}. Picco ${bytes(peak)} per intervallo.`);
+  canvas.setAttribute("aria-label", `${aria}. Peak ${bytes(peak)} per interval.`);
   const left = 63;
   const lastY = height - 24;
   const top = 13;
@@ -167,8 +167,8 @@ function draw(data) {
     const bucket = latest - (12 - index) * 300;
     return byBucket.get(bucket) || { bucket, tx: 0, rx: 0 };
   }) : [];
-  drawChart("live-chart", intervals, (point) => hour.format(new Date(point.bucket * 1000)), "Traffico Internet nell’ultima ora");
-  drawChart("history-chart", data.history, (point) => dates.format(new Date(`${point.period}T12:00:00`)), "Traffico aggregato del periodo");
+  drawChart("live-chart", intervals, (point) => hour.format(new Date(point.bucket * 1000)), "Internet traffic in the last hour");
+  drawChart("history-chart", data.history, (point) => dates.format(new Date(`${point.period}T12:00:00`)), "Traffic totals for the selected range");
 }
 
 function render(data) {
@@ -177,9 +177,9 @@ function render(data) {
   get("indicator").dataset.state = status.state;
   get("connection").textContent = stateName[status.state] || status.state;
   get("connection-detail").textContent = status.message || (status.last_packet
-    ? `Interfaccia ${status.interface} · Ultimo pacchetto ${stamp(status.last_packet)}`
-    : `Interfaccia ${status.interface} · In attesa di traffico Internet`);
-  get("retention").textContent = `Conservazione dello storico: ${status.retention_days} giorni`;
+    ? `Interface ${status.interface} · Last packet ${stamp(status.last_packet)}`
+    : `Interface ${status.interface} · Waiting for Internet traffic`);
+  get("retention").textContent = `Conservazione dello history: ${status.retention_days} days`;
 
   get("received").textContent = bytes(data.live.reduce((sum, item) => sum + item.rx, 0));
   get("sent").textContent = bytes(data.live.reduce((sum, item) => sum + item.tx, 0));
@@ -188,26 +188,26 @@ function render(data) {
   draw(data);
 
   const shown = controls.device.value ? data.devices.filter((item) => item.id === controls.device.value) : data.devices;
-  table("device-rows", shown, 6, "Nessun dispositivo osservato", (item) => [
+  table("device-rows", shown, 6, "No devices observed", (item) => [
     cell(button(item.name || item.id, () => selectDevice(item.id))),
     cell(item.addresses?.split(",").join(", "), "", "address"),
     cell(item.mac), cell(bytes(item.tx), "", "number"), cell(bytes(item.rx), "", "number"), cell(stamp(item.last)),
   ]);
-  table("server-rows", data.servers, 6, "Nessuna destinazione osservata", (item) => [
+  table("server-rows", data.servers, 6, "No destinations observed", (item) => [
     cell(button(item.remote, () => {
       controls.q.value = item.remote;
       currentPage = 0;
       refresh();
-      get("comunicazioni").scrollIntoView();
+      get("communications").scrollIntoView();
     }), "", "address"),
     cell(item.domain, "", "address"), cell(item.country),
     cell(bytes(item.tx), "", "number"), cell(bytes(item.rx), "", "number"), cell(stamp(item.first)),
   ]);
-  table("flow-rows", data.flows, 8, "Nessuna comunicazione per questi filtri", (item) => {
+  table("flow-rows", data.flows, 8, "No connections match these filters", (item) => {
     const flags = element("div");
-    if (item.new) flags.append(element("span", "Nuova", "tag"));
-    if (item.night) flags.append(element("span", "Notte", "tag night"));
-    if (item.period_seconds) flags.append(element("span", `Ogni ${number.format(item.period_seconds / 60)} min`, "tag"));
+    if (item.new) flags.append(element("span", "New", "tag"));
+    if (item.night) flags.append(element("span", "Night", "tag night"));
+    if (item.period_seconds) flags.append(element("span", `Every ${number.format(item.period_seconds / 60)} min`, "tag"));
     return [
       cell(button(item.name || item.device, () => selectDevice(item.device)), item.local),
       cell(item.remote, item.domain, "address"), cell(item.port ? `${item.protocol} / ${item.port}` : item.protocol),
@@ -228,7 +228,7 @@ async function refresh() {
   currentRequest = request;
   const params = new URLSearchParams();
   for (const [key, control] of Object.entries(controls)) params.set(key, control.value);
-  get("csv").href = `/api/comunicazioni.csv?${params}`;
+  get("csv").href = `/api/communications.csv?${params}`;
   params.set("page", String(currentPage));
   try {
     const response = await fetch(`/api/dashboard?${params}`, { signal: request.signal, cache: "no-store" });
@@ -239,7 +239,7 @@ async function refresh() {
     render(data);
   } catch (error) {
     if (error.name === "AbortError") return;
-    get("error").textContent = "Dashboard temporaneamente indisponibile. Nuovo tentativo automatico.";
+    get("error").textContent = "Dashboard temporarily unavailable. Retrying automatically.";
     get("error").hidden = false;
   }
 }

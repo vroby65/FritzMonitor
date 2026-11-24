@@ -1,4 +1,4 @@
-"""Inventario dei dispositivi dalla sola interfaccia TR-064 locale."""
+"""Read the device inventory from the local TR-064 interface."""
 
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -50,7 +50,7 @@ class HostAPI:
                 fingerprint = sha256(self.sock.getpeercert(binary_form=True)).hexdigest()
                 if not compare_digest(fingerprint, router.fingerprint):
                     self.close()
-                    raise OSError("Il certificato di TR-064 è diverso da quello configurato")
+                    raise OSError("The TR-064 certificate does not match the configured fingerprint")
 
         class PinnedHTTPS(HTTPSHandler):
             def https_open(self, request):
@@ -69,7 +69,7 @@ class HostAPI:
         with self.opener.open(request, timeout=5) as response:
             raw = response.read(2 * 1024 * 1024 + 1)
         if len(raw) > 2 * 1024 * 1024:
-            raise ValueError("Risposta TR-064 troppo grande")
+            raise ValueError("TR-064 response exceeds the size limit")
         return ET.fromstring(raw)
 
     def soap(self, action, address=None):
@@ -92,7 +92,7 @@ class HostAPI:
         fields = self.soap("X_AVM-DE_GetHostListPath")
         path = fields.get("NewX_AVM-DE_HostListPath", "")
         if not path or not re.match(r"^/[^/]", path):
-            raise ValueError("Il router ha restituito un percorso TR-064 non valido")
+            raise ValueError("The router returned an invalid TR-064 path")
         result = {}
         for row in self.fetch(self.base + path):
             info = {element.tag: element.text for element in row}
@@ -165,7 +165,7 @@ class HostDirectory:
                     self.ipv4 = self.api.hosts()
                     next_refresh = monotonic() + 300
                 except ERRORS as error:
-                    self.logger.warning("Inventario TR-064: %s", type(error).__name__)
+                    self.logger.warning("TR-064 inventory: %s", type(error).__name__)
                     next_refresh = monotonic() + 60
             if monotonic() >= next_neighbors:
                 try:
@@ -176,7 +176,7 @@ class HostDirectory:
                     if adapter:
                         self.neighbors = ipv6_neighbors(adapter, self.ipv4)
                 except (OSError, ValueError, KeyError, IndexError, subprocess.SubprocessError):
-                    self.logger.debug("Tabella indirizzi IPv6 locale non disponibile")
+                    self.logger.debug("Local IPv6 address table unavailable")
                 next_neighbors = monotonic() + 30
             try:
                 address = self.requests.get(timeout=0.5)
@@ -189,7 +189,7 @@ class HostDirectory:
                     if len(self.ipv6) > 4096:
                         self.ipv6.pop(next(iter(self.ipv6)))
             except ERRORS as error:
-                self.logger.debug("Ricerca IPv6 TR-064: %s", type(error).__name__)
+                self.logger.debug("TR-064 IPv6 lookup: %s", type(error).__name__)
             self.stop.wait(0.2)
 
 

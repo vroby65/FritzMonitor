@@ -1,1 +1,1 @@
-Prima di modificare FritzMonitor, leggi [la guida del progetto](agent/README.md).
+Read the [project guide](agent/README.md) before modifying FritzMonitor.

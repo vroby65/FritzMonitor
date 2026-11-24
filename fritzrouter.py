@@ -1,4 +1,4 @@
-"""Accesso HTTPS al FRITZ!Box e flusso PCAP della pagina di supporto."""
+"""Access the FRITZ!Box support capture over HTTPS."""
 
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -33,7 +33,7 @@ class AuthenticationError(RouterError):
 
 class LoginBlocked(RouterError):
     def __init__(self, seconds):
-        super().__init__(f"Il router sospende l'accesso per {seconds} secondi")
+        super().__init__(f"Router sign-in is blocked for {seconds} seconds")
         self.seconds = seconds
 
 
@@ -44,19 +44,19 @@ class CertificateError(RouterError):
 def pcap_chunks(response):
     magic = response.read(4)
     if magic not in PCAP_MAGIC:
-        raise RouterError("Il router non ha restituito uno stream PCAP")
+        raise RouterError("The router returned no PCAP stream")
     if magic not in MODIFIED_PCAP:
         yield magic
         while chunk := response.read1(65536):
             yield chunk
         return
 
-    # Il PCAP modificato del router ha otto byte aggiuntivi per record.
-    # TShark 4.2 richiede un formato non ambiguo quando legge da una pipe.
+    # The router's modified PCAP has eight extra bytes per record.
+    # TShark 4.2 needs an unambiguous format when reading from a pipe.
     byte_order = MODIFIED_PCAP[magic]
     header = response.read(20)
     if len(header) != 20:
-        raise RouterError("Intestazione PCAP modificata incompleta")
+        raise RouterError("Incomplete modified PCAP header")
     snaplen, link_type = struct.unpack_from(byte_order + "II", header, 12)
     yield struct.pack(byte_order + "I", 0xA1B2C3D4) + header[:16] + struct.pack(
         byte_order + "I", 101 if link_type == 14 else link_type,
@@ -70,7 +70,7 @@ def pcap_chunks(response):
         while len(buffer) - offset >= 24:
             captured, original = lengths.unpack_from(buffer, offset + 8)
             if captured > min(original, snaplen, 262144):
-                raise RouterError("Dimensione del record PCAP non valida")
+                raise RouterError("Invalid PCAP record size")
             end = offset + 24 + captured
             if end > len(buffer):
                 break
@@ -81,12 +81,12 @@ def pcap_chunks(response):
             buffer = buffer[offset:]
             yield converted
     if buffer:
-        raise RouterError("Record PCAP incompleto")
+        raise RouterError("Incomplete PCAP record")
 
 
 def solve_challenge(challenge, password):
     if not re.fullmatch(r"2\$[1-9]\d{0,6}\$[0-9a-fA-F]+\$[1-9]\d{0,6}\$[0-9a-fA-F]+", challenge):
-        raise RouterError("Challenge PBKDF2 assente o non valido")
+        raise RouterError("Missing or invalid PBKDF2 challenge")
     _, rounds1, salt1, rounds2, salt2 = challenge.split("$")
     first = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt1), int(rounds1))
     second = hashlib.pbkdf2_hmac("sha256", first, bytes.fromhex(salt2), int(rounds2))
@@ -159,7 +159,7 @@ def interfaces_from_page(raw):
         page.feed(raw.decode("utf-8", errors="replace"))
         interfaces = page.interfaces
     if not interfaces:
-        raise RouterError("Elenco assente in data.lua (pagina cap). Verificare i permessi e la pagina di cattura")
+        raise RouterError("Interface list missing from data.lua (page cap). Check permissions and the capture page")
     return interfaces
 
 
@@ -170,7 +170,7 @@ def default_username(state):
     users = state.findall("Users/User")
     if len(users) == 1 and users[0].text:
         return users[0].text
-    raise AuthenticationError("Impostare esplicitamente il nome utente del FRITZ!Box")
+    raise AuthenticationError("Specify the FRITZ!Box username")
 
 
 class Router:
@@ -178,7 +178,7 @@ class Router:
         self.host = host
         self.fingerprint = fingerprint
         self.timeout = timeout
-        # Il certificato locale può essere autofirmato e senza SAN per l'IPv4.
+        # The local certificate may be self-signed and lack an IPv4 subject alternative name.
         self.tls = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.tls.check_hostname = False
         self.tls.verify_mode = ssl.CERT_NONE
@@ -190,7 +190,7 @@ class Router:
             conn.connect()
             actual = hashlib.sha256(conn.sock.getpeercert(binary_form=True)).hexdigest()
             if self.fingerprint and not compare_digest(actual, self.fingerprint):
-                raise CertificateError("Il certificato HTTPS è cambiato. Verificarlo prima di riconfigurare")
+                raise CertificateError("The HTTPS certificate changed. Verify it before updating the configuration")
             yield conn, actual
         finally:
             conn.close()
@@ -202,7 +202,7 @@ class Router:
     @contextmanager
     def request(self, path, form=None, timeout=None):
         if not self.fingerprint:
-            raise CertificateError("Configurare prima l'impronta del certificato HTTPS")
+            raise CertificateError("Set the HTTPS certificate fingerprint first")
         headers = {"User-Agent": "FritzMonitor/0.1"}
         body = None
         if form is not None:
@@ -212,27 +212,27 @@ class Router:
             conn.request("POST" if body is not None else "GET", path, body, headers)
             with conn.getresponse() as response:
                 if response.status != 200:
-                    raise RouterError(f"Risposta HTTP {response.status} dal router")
+                    raise RouterError(f"HTTP {response.status} from the router")
                 yield response
 
     def read(self, path, form=None, timeout=None):
         with self.request(path, form, timeout) as response:
             content = response.read(2 * 1024 * 1024 + 1)
         if len(content) > 2 * 1024 * 1024:
-            raise RouterError("Risposta di controllo del router troppo grande")
+            raise RouterError("Router control response exceeds the size limit")
         return content
 
     def state(self, form=None, timeout=None):
         try:
             return ET.fromstring(self.read(LOGIN, form, timeout))
         except ET.ParseError as error:
-            raise RouterError("Risposta XML di accesso non valida") from error
+            raise RouterError("Invalid sign-in XML response") from error
 
     def info(self):
         try:
             root = ET.fromstring(self.read("/jason_boxinfo.xml"))
         except ET.ParseError as error:
-            raise RouterError("Descrizione XML del router non valida") from error
+            raise RouterError("Invalid router description XML") from error
         fields = {node.tag.rsplit("}", 1)[-1]: node.text for node in root.iter()}
         version = fields.get("Version", "")
         if version.count(".") == 2:
@@ -248,7 +248,7 @@ class Router:
         challenge = solve_challenge(state.findtext("Challenge", ""), password)
         sid = self.state({"username": username, "response": challenge}).findtext("SID", "")
         if not re.fullmatch(r"[0-9a-f]{16}", sid) or sid == "0" * 16:
-            raise AuthenticationError("Accesso rifiutato. Verificare utente, password e permessi")
+            raise AuthenticationError("Sign-in failed. Check the username, password, and permissions")
         return sid
 
     def logout(self, sid):
